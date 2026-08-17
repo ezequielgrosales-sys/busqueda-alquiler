@@ -1,14 +1,28 @@
 # Buscador automático de alquiler (ZonaProp + Argenprop + MercadoLibre)
 
 Revisa cada 3 horas si hay publicaciones nuevas en Rosario (Echesortu,
-Centro, Abasto), 2 dormitorios, hasta $600.000, y te avisa por WhatsApp.
+Centro, Abasto), 2 dormitorios, hasta $600.000, y te avisa por email.
 Corre gratis en GitHub Actions, no necesitás dejar nada prendido.
 
-## 1. Conseguir el API key de WhatsApp (CallMeBot, gratis)
+## 1. Generar una contraseña de aplicación de Gmail
 
-1. Agregá el contacto **+34 644 51 95 23** a tu WhatsApp.
-2. Mandale el mensaje exacto: `I allow callmebot to add me`
-3. En unos segundos te responde con tu **apikey** (un número). Guardalo.
+No se puede usar tu contraseña normal de Gmail para esto (Google no lo
+permite), hay que generar una "contraseña de aplicación" específica:
+
+1. Andá a **myaccount.google.com/security**.
+2. Activá la **verificación en dos pasos** si todavía no la tenés
+   activada (es un requisito para poder generar la contraseña de
+   aplicación).
+3. Buscá **"Contraseñas de aplicaciones"** (podés escribirlo en el
+   buscador de arriba de esa misma página, o ir directo a
+   myaccount.google.com/apppasswords).
+4. Ponele un nombre cualquiera (ej. "scraper alquiler") y generala.
+5. Google te muestra una contraseña de 16 letras (tipo `abcd efgh ijkl
+   mnop`). Copiala sin espacios — es la que vas a usar, no la de tu
+   cuenta.
+
+Si no usás Gmail, decime qué proveedor de mail tenés y adapto el script
+a su servidor SMTP (el de Gmail es el más simple de activar).
 
 ## 2. Subir este proyecto a GitHub
 
@@ -20,9 +34,10 @@ Corre gratis en GitHub Actions, no necesitás dejar nada prendido.
 
 En el repo: **Settings → Secrets and variables → Actions → New repository secret**
 
-- `CALLMEBOT_PHONE`: tu número con código de país, sin `+` ni espacios
-  (ej. `5493411234567`)
-- `CALLMEBOT_APIKEY`: el número que te dio CallMeBot en el paso 1
+- `EMAIL_USER`: tu dirección completa de Gmail (ej. `tucorreo@gmail.com`)
+- `EMAIL_PASS`: la contraseña de aplicación de 16 letras del paso 1
+- `EMAIL_TO`: a qué mail querés que lleguen los avisos (puede ser el
+  mismo `EMAIL_USER` u otro distinto)
 
 ## 4. Activar el workflow
 
@@ -58,7 +73,7 @@ filtros que quieras y copiando el link que te queda.
   barrios) y por precio.
 - Guarda en `data/seen.json` los IDs de las publicaciones que ya
   procesó, así no te vuelve a avisar de las mismas.
-- Solo te manda WhatsApp cuando hay algo **nuevo** que matchea tus
+- Solo te manda un email cuando hay algo **nuevo** que matchea tus
   filtros.
 
 ## Si un sitio deja de andar (importante)

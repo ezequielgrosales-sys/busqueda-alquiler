@@ -11,8 +11,8 @@ CONFIGURÁ TUS FILTROS ACÁ ABAJO (sección CONFIG).
 import json
 import os
 import re
-import urllib.parse
-import urllib.request
+import smtplib
+from email.message import EmailMessage
 from pathlib import Path
 
 import requests
@@ -50,28 +50,35 @@ HEADERS = {
     "Accept-Language": "es-AR,es;q=0.9",
 }
 
-# ============================ CALLMEBOT ==============================
-# Notificaciones por WhatsApp. Necesitás CALLMEBOT_PHONE y
-# CALLMEBOT_APIKEY como variables de entorno (ver README para cómo
-# conseguir el apikey).
+# ============================== EMAIL =================================
+# Notificaciones por email vía Gmail SMTP. Necesitás las variables de
+# entorno EMAIL_USER, EMAIL_PASS (contraseña de aplicación de Gmail,
+# no tu contraseña normal) y EMAIL_TO (a quién le llega el aviso).
+# Ver README para cómo generar la contraseña de aplicación.
 
-def send_whatsapp(mensaje: str) -> None:
-    phone = os.environ.get("CALLMEBOT_PHONE")
-    apikey = os.environ.get("CALLMEBOT_APIKEY")
-    if not phone or not apikey:
-        print("[WARN] Faltan CALLMEBOT_PHONE / CALLMEBOT_APIKEY, no se envía WhatsApp.")
+def send_email(asunto: str, mensaje: str) -> None:
+    user = os.environ.get("EMAIL_USER")
+    password = os.environ.get("EMAIL_PASS")
+    destinatario = os.environ.get("EMAIL_TO", user)
+
+    if not user or not password:
+        print("[WARN] Faltan EMAIL_USER / EMAIL_PASS, no se envía email.")
         print(mensaje)
         return
 
-    url = (
-        "https://api.callmebot.com/whatsapp.php"
-        f"?phone={phone}&text={urllib.parse.quote(mensaje)}&apikey={apikey}"
-    )
+    msg = EmailMessage()
+    msg["Subject"] = asunto
+    msg["From"] = user
+    msg["To"] = destinatario
+    msg.set_content(mensaje)
+
     try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
-            print("[CallMeBot]", resp.status, resp.read()[:200])
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as smtp:
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        print("[Email] enviado a", destinatario)
     except Exception as e:
-        print("[ERROR] No se pudo enviar el WhatsApp:", e)
+        print("[ERROR] No se pudo enviar el email:", e)
 
 
 # ============================ HELPERS ================================
@@ -230,7 +237,7 @@ def main() -> None:
             lineas.append(f"[{sitio}] {precio_txt}\n{item['url']}\n")
         mensaje = "\n".join(lineas)
         print(mensaje)
-        send_whatsapp(mensaje)
+        send_email(f"🏠 {len(nuevos_avisos)} alquiler(es) nuevo(s) encontrado(s)", mensaje)
     else:
         print("Sin novedades esta vez.")
 
