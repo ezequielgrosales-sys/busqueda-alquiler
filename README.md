@@ -1,8 +1,12 @@
-# Buscador automático de alquiler (ZonaProp + Argenprop + MercadoLibre)
+# Buscador automático de alquiler (ZonaProp + MercadoLibre + RE/MAX)
 
-Revisa cada 3 horas si hay publicaciones nuevas en Rosario (Echesortu,
+Revisa cada 12 horas si hay publicaciones nuevas en Rosario (Echesortu,
 Centro, Abasto), 2 dormitorios, hasta $600.000, y te avisa por email.
 Corre gratis en GitHub Actions, no necesitás dejar nada prendido.
+
+Nota: Argenprop quedó desactivado (comentado en `scraper.py`) porque
+bloquea tanto los pedidos simples como el navegador headless — no hay
+forma confiable de scrapearlo sin técnicas mucho más agresivas.
 
 ## 1. Generar una contraseña de aplicación de Gmail
 
