@@ -1,9 +1,9 @@
 """
-Scraper de alquileres — ZonaProp, Argenprop y MercadoLibre
+Scraper de alquileres — ZonaProp, MercadoLibre y RE/MAX
 ------------------------------------------------------------
 Busca departamentos/casas nuevos que matcheen tus filtros y avisa por
-WhatsApp (vía CallMeBot) solo cuando aparece una publicación que no
-vio antes. Pensado para correr cada pocas horas con GitHub Actions.
+email solo cuando aparece una publicación que no vio antes. Pensado
+para correr cada pocas horas con GitHub Actions.
 
 CONFIGURÁ TUS FILTROS ACÁ ABAJO (sección CONFIG).
 """
@@ -36,8 +36,12 @@ DORMITORIOS = 2
 # (cada sitio arma la URL distinto).
 SEARCH_URLS = {
     "ZonaProp": "https://www.zonaprop.com.ar/departamentos-alquiler-rosario-2-habitaciones.html",
-    "Argenprop": "https://www.argenprop.com/departamentos/alquiler/rosario/2-dormitorios",
     "MercadoLibre": "https://inmuebles.mercadolibre.com.ar/departamentos-alquiler-rosario-2-dormitorios",
+    "RE/MAX": "https://www.remax.com.ar/listings/rent?page=0&pageSize=48&sort=-createdAt&in:operationId=2&in:eStageId=0,1,2,3,4&in:typeId=1,2,3,4,5,6,7,8&locations=in:::460@rosario",
+    # "Argenprop": "https://www.argenprop.com/departamentos/alquiler/rosario/2-dormitorios",
+    # ^ Desactivado: Argenprop bloquea tanto pedidos simples como el
+    # navegador headless (protección anti-bot fuerte, tipo Cloudflare).
+    # Descomentá esta línea si en algún momento querés reintentarlo.
 }
 
 # Archivo donde se guardan los IDs de publicaciones ya vistas (no tocar)
@@ -244,11 +248,36 @@ def parse_mercadolibre(html: str) -> list[dict]:
     return resultados
 
 
+def parse_remax(html: str) -> list[dict]:
+    # Las publicaciones individuales de RE/MAX viven en /listings/<slug>
+    # (sin "?", que es lo que usan las páginas de búsqueda como
+    # /listings/rent?page=0&...). Ese "$" al final del patrón es lo que
+    # separa una cosa de la otra.
+    return extraer_por_patron_de_link(html, "https://www.remax.com.ar", r"/listings/[a-z0-9-]+$")
+
+
 PARSERS = {
     "ZonaProp": parse_zonaprop,
     "Argenprop": parse_argenprop,
     "MercadoLibre": parse_mercadolibre,
+    "RE/MAX": parse_remax,
 }
+
+# RE/MAX no tiene filtro de dormitorios en la URL de búsqueda (a
+# diferencia de los otros sitios), así que ese filtro se aplica acá,
+# sobre el texto de cada publicación, como chequeo extra.
+NUMEROS_TEXTO = {1: "uno", 2: "dos", 3: "tres", 4: "cuatro", 5: "cinco"}
+
+
+def matches_dormitorios(texto: str) -> bool:
+    texto = texto.lower()
+    if re.search(rf"{DORMITORIOS}\s*dorm", texto):
+        return True
+    palabra = NUMEROS_TEXTO.get(DORMITORIOS)
+    return bool(palabra and f"{palabra} dormitorio" in texto)
+
+
+SITIOS_CON_FILTRO_DORMITORIOS = {"RE/MAX"}
 
 
 # ============================ MAIN LOGIC ==============================
@@ -271,11 +300,14 @@ def main() -> None:
     for sitio, url in SEARCH_URLS.items():
         print(f"--- Revisando {sitio} ---")
         html = fetch(url)
-        if not html:
-            continue
-
         parser = PARSERS[sitio]
-        listings = parser(html)
+        listings = parser(html) if html else []
+
+        if not listings:
+            print("  0 resultados con pedido rápido, reintentando con navegador headless...")
+            html = fetch_with_playwright(url)
+            listings = parser(html) if html else []
+
         print(f"  {len(listings)} publicaciones encontradas en la búsqueda")
 
         for item in listings:
@@ -286,6 +318,12 @@ def main() -> None:
             # Filtro de barrio (si no matchea ninguno de tus barrios, se ignora)
             if not matches_barrio(item["titulo"]):
                 seen.add(uid)  # lo marcamos visto igual para no re-chequearlo
+                continue
+
+            # Filtro extra de dormitorios, solo para sitios que no lo
+            # soportan como parámetro de búsqueda (ver SITIOS_CON_FILTRO_DORMITORIOS)
+            if sitio in SITIOS_CON_FILTRO_DORMITORIOS and not matches_dormitorios(item["titulo"]):
+                seen.add(uid)
                 continue
 
             # Filtro de precio (si no se pudo leer el precio, lo dejamos pasar
