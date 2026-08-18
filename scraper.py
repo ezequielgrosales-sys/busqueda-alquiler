@@ -14,6 +14,7 @@ import re
 import smtplib
 from email.message import EmailMessage
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -41,14 +42,6 @@ SEARCH_URLS = {
 
 # Archivo donde se guardan los IDs de publicaciones ya vistas (no tocar)
 SEEN_FILE = Path(__file__).parent / "data" / "seen.json"
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "es-AR,es;q=0.9",
-}
 
 # ============================== EMAIL =================================
 # Notificaciones por email vía Gmail SMTP. Necesitás las variables de
@@ -100,14 +93,54 @@ def parse_precio(texto: str) -> int | None:
 
 
 def fetch(url: str) -> str | None:
+    """Intenta traer la página con un pedido simple (rápido). Si el sitio
+    lo bloquea (403, contenido vacío/muy corto), reintenta con un
+    navegador headless (Playwright), que es más lento pero más difícil
+    de bloquear porque ejecuta JavaScript como un navegador real."""
+    browser_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+        "Referer": "https://www.google.com/",
+    }
     try:
-        r = requests.get(url, headers=HEADERS, timeout=25)
-        if r.status_code != 200:
-            print(f"[WARN] {url} devolvió status {r.status_code}")
-            return None
-        return r.text
+        r = requests.get(url, headers=browser_headers, timeout=25)
+        if r.status_code == 200 and len(r.text) > 3000:
+            return r.text
+        print(f"[WARN] {url} devolvió status {r.status_code} / {len(r.text)} bytes — probando con navegador headless")
     except Exception as e:
-        print(f"[ERROR] fallo al pedir {url}: {e}")
+        print(f"[WARN] fallo pedido simple a {url}: {e} — probando con navegador headless")
+
+    return fetch_with_playwright(url)
+
+
+def fetch_with_playwright(url: str) -> str | None:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("[ERROR] Playwright no está instalado, no se pudo usar como respaldo.")
+        return None
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
+                locale="es-AR",
+            )
+            page.goto(url, timeout=35000, wait_until="domcontentloaded")
+            page.wait_for_timeout(4000)  # deja que termine de cargar contenido dinámico
+            html = page.content()
+            browser.close()
+            return html
+    except Exception as e:
+        print(f"[ERROR] Playwright también falló para {url}: {e}")
         return None
 
 
@@ -118,44 +151,51 @@ def fetch(url: str) -> str | None:
 # están armadas las tarjetas de resultado, y ajustá el selector acá.
 # Ver README, sección "Si un sitio deja de andar".
 
-def parse_zonaprop(html: str) -> list[dict]:
+def extraer_por_patron_de_link(html: str, base_url: str, patron_id: str) -> list[dict]:
+    """Busca todos los <a> cuyo href matchee patron_id (identifica una
+    publicación individual) y arma el resultado con el texto de un
+    contenedor cercano (para sacar precio/título aproximados)."""
     soup = BeautifulSoup(html, "html.parser")
+    vistos = set()
     resultados = []
-    for card in soup.select("div[data-qa='POSTING_CARD_LISTING']"):
-        link_tag = card.select_one("a[data-to-posting]") or card.find("a", href=True)
-        if not link_tag:
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if not re.search(patron_id, href):
             continue
-        href = link_tag.get("href", "")
-        url = href if href.startswith("http") else f"https://www.zonaprop.com.ar{href}"
-        titulo = card.get_text(" ", strip=True)
-        precio = parse_precio(titulo)
+        url = href if href.startswith("http") else urljoin(base_url, href)
+        clave = url.split("?")[0].rstrip("/")
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+
+        # Subimos un par de niveles en el árbol HTML para capturar la
+        # tarjeta completa (con precio, dirección, etc.), no solo el link.
+        contenedor = a
+        for _ in range(3):
+            if contenedor.parent is not None:
+                contenedor = contenedor.parent
+        titulo = contenedor.get_text(" ", strip=True)
+
         resultados.append({
-            "id": url.split("/")[-1],
+            "id": clave.split("/")[-1],
             "url": url,
-            "titulo": titulo[:150],
-            "precio": precio,
+            "titulo": titulo[:200],
+            "precio": parse_precio(titulo),
         })
     return resultados
+
+
+def parse_zonaprop(html: str) -> list[dict]:
+    # Los links de publicaciones de ZonaProp terminan en un número de
+    # aviso largo seguido de ".html", ej: .../pieza-en-alquiler-45123456.html
+    return extraer_por_patron_de_link(html, "https://www.zonaprop.com.ar", r"-\d{6,}\.html")
 
 
 def parse_argenprop(html: str) -> list[dict]:
-    soup = BeautifulSoup(html, "html.parser")
-    resultados = []
-    for card in soup.select("div.listing__item, div[data-posting-type]"):
-        link_tag = card.find("a", href=True)
-        if not link_tag:
-            continue
-        href = link_tag.get("href", "")
-        url = href if href.startswith("http") else f"https://www.argenprop.com{href}"
-        titulo = card.get_text(" ", strip=True)
-        precio = parse_precio(titulo)
-        resultados.append({
-            "id": url.rstrip("/").split("/")[-1],
-            "url": url,
-            "titulo": titulo[:150],
-            "precio": precio,
-        })
-    return resultados
+    # Los links de publicaciones de Argenprop terminan en "--" seguido
+    # de un número de aviso, ej: .../departamento-en-alquiler--12345678
+    return extraer_por_patron_de_link(html, "https://www.argenprop.com", r"--\d{5,}")
 
 
 def parse_mercadolibre(html: str) -> list[dict]:
