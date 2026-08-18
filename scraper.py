@@ -126,19 +126,46 @@ def fetch_with_playwright(url: str) -> str | None:
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page(
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                ],
+            )
+            context = browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
                 ),
                 locale="es-AR",
+                viewport={"width": 1366, "height": 768},
+                extra_http_headers={"Accept-Language": "es-AR,es;q=0.9,en;q=0.8"},
             )
+            # Camufla la señal más común que usan los sitios para detectar
+            # navegadores automatizados (navigator.webdriver = true).
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+            )
+            page = context.new_page()
             page.goto(url, timeout=35000, wait_until="domcontentloaded")
-            page.wait_for_timeout(4000)  # deja que termine de cargar contenido dinámico
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                pass  # algunos sitios nunca llegan a "networkidle", seguimos igual
+            page.wait_for_timeout(3000)
             html = page.content()
             browser.close()
-            return html
+
+        # Diagnóstico: si el HTML es corto o tiene palabras típicas de una
+        # pantalla anti-bot, probablemente el sitio también bloqueó al
+        # navegador headless (no es un error nuestro, es protección del sitio).
+        texto_lower = html.lower()
+        señales_bloqueo = ["access denied", "attention required", "cloudflare", "are you human", "verificando"]
+        if len(html) < 5000 or any(s in texto_lower for s in señales_bloqueo):
+            print(f"[WARN] La página parece haber bloqueado también al navegador headless ({len(html)} bytes)")
+
+        return html
     except Exception as e:
         print(f"[ERROR] Playwright también falló para {url}: {e}")
         return None
