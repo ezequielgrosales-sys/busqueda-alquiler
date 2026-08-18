@@ -2,8 +2,8 @@ name: Buscar alquileres nuevos
 
 on:
   schedule:
-    # Corre cada 3 horas. Los horarios de GitHub Actions están en UTC.
-    - cron: "0 */3 * * *"
+    # Corre cada 12 horas (9 y 21 hs UTC = 6 y 18 hs de Argentina).
+    - cron: "0 9,21 * * *"
   workflow_dispatch: {}  # permite correrlo a mano desde la pestaña "Actions"
 
 # Necesario para que el workflow pueda commitear data/seen.json de vuelta al repo
