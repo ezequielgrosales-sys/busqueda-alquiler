@@ -25,6 +25,9 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Instalar navegador headless (Playwright)
+        run: playwright install --with-deps chromium
+
       - name: Correr scraper
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
