@@ -1,11 +1,12 @@
 """
-Scraper de alquileres — ZonaProp, MercadoLibre y RE/MAX
+Scraper de alquileres — ZonaProp, MercadoLibre, RE/MAX + inmobiliarias
 ------------------------------------------------------------
 Busca departamentos/casas nuevos que matcheen tus filtros y avisa por
 email solo cuando aparece una publicación que no vio antes. Pensado
 para correr cada pocas horas con GitHub Actions.
 
-CONFIGURÁ TUS FILTROS ACÁ ABAJO (sección CONFIG).
+CONFIGURÁ TUS FILTROS ACÁ ABAJO (sección CONFIG). Para sumar una
+inmobiliaria nueva, ver SITIOS_INMOBILIARIAS más abajo.
 """
 
 import json
@@ -86,12 +87,21 @@ def matches_barrio(texto: str) -> bool:
 
 
 def parse_precio(texto: str) -> int | None:
-    """Extrae un número de precio en pesos de un string tipo '$ 450.000'."""
-    match = re.search(r"\$\s?([\d.]+)", texto.replace("\xa0", " "))
+    """Extrae un número de precio en pesos de un string tipo '$ 450.000'.
+    Si detecta que el precio está en dólares (USD/u$s), devuelve None -
+    no lo podemos comparar directo contra PRECIO_MAXIMO (que es en
+    pesos), así que lo dejamos pasar sin filtrar por precio."""
+    texto_limpio = texto.replace("\xa0", " ")
+    if re.search(r"u\$s|usd", texto_limpio, re.IGNORECASE):
+        return None
+    match = re.search(r"\$\s?([\d.,]+)", texto_limpio)
     if not match:
         return None
+    solo_digitos = re.sub(r"[^\d]", "", match.group(1))
+    if not solo_digitos:
+        return None
     try:
-        return int(match.group(1).replace(".", ""))
+        return int(solo_digitos)
     except ValueError:
         return None
 
@@ -275,6 +285,85 @@ PARSERS = {
     "RE/MAX": parse_remax,
 }
 
+# ==================== INMOBILIARIAS (patrón genérico) =================
+# Estos sitios no necesitan una función de parser propia: alcanza con
+# decirle al extractor genérico (a) la URL de la página de alquileres y
+# (b) cómo reconocer el link de una publicación individual. Para sumar
+# una inmobiliaria nueva, alcanza con agregar una entrada acá — no hace
+# falta escribir código nuevo, salvo que el sitio sea un caso raro.
+SITIOS_INMOBILIARIAS = {
+    "Bertollo": {
+        "url": "https://www.bertollo.com.ar/Alquiler",
+        "base": "https://www.bertollo.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "COSA Propiedades": {
+        "url": "https://www.cosapropiedades.com/Alquiler",
+        "base": "https://www.cosapropiedades.com",
+        "patron": r"/p/\d+-",
+    },
+    "Dunod": {
+        "url": "https://dunod.com.ar/inmuebles/?status%5B%5D=alquiler",
+        "base": "https://dunod.com.ar",
+        "patron": r"/inmueble/[a-z0-9-]+/?$",
+    },
+    "Eigen": {
+        "url": "https://eigen.com.ar/alquiler/",
+        "base": "https://eigen.com.ar",
+        "patron": r"/property/[a-z0-9-]+/?$",
+    },
+    "Inmobiliaria Echesortu": {
+        "url": "https://inmobiliariaechesortu.com/operacion/alquileres/",
+        "base": "https://inmobiliariaechesortu.com",
+        "patron": r"/propiedades/[a-z0-9-]+/?$",
+    },
+    "Escala Propiedades": {
+        "url": "https://www.escalapropiedades.com.ar/Alquiler",
+        "base": "https://www.escalapropiedades.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "GANA Propiedades": {
+        "url": "https://www.ganapropiedades.com.ar/Alquiler",
+        "base": "https://www.ganapropiedades.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Imperia Propiedades": {
+        "url": "https://imperiapropiedades.com/En-alquiler",
+        "base": "https://imperiapropiedades.com",
+        "patron": r"/propiedad-\d+-",
+    },
+    "EMA Bienes Raíces": {
+        "url": "https://www.ema.ar/estado/en-alquiler/",
+        "base": "https://www.ema.ar",
+        "patron": r"/propiedad/\d+_[a-z0-9-]+/?$",
+    },
+    "Inmobiliaria M&M": {
+        "url": "https://www.inmobiliariamym.com.ar/Alquiler",
+        "base": "https://www.inmobiliariamym.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Enz Propiedades": {
+        "url": "https://www.enzpropiedades.com.ar/Alquiler",
+        "base": "https://www.enzpropiedades.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "SIGMA": {
+        "url": "https://www.sigmapropiedades.com.ar/Alquiler",
+        "base": "https://www.sigmapropiedades.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Ideal Propiedades": {
+        "url": "https://www.idealpropiedades.com.ar/Alquiler",
+        "base": "https://www.idealpropiedades.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "RCS Inmobiliaria": {
+        "url": "https://rcsinmobiliaria.com.ar/site/properties/rental",
+        "base": "https://rcsinmobiliaria.com.ar",
+        "patron": r"/site/properties/\d+/[a-z0-9-]+",
+    },
+}
+
 # RE/MAX no tiene filtro de dormitorios en la URL de búsqueda (a
 # diferencia de los otros sitios), así que ese filtro se aplica acá,
 # sobre el texto de cada publicación, como chequeo extra.
@@ -289,7 +378,7 @@ def matches_dormitorios(texto: str) -> bool:
     return bool(palabra and f"{palabra} dormitorio" in texto)
 
 
-SITIOS_CON_FILTRO_DORMITORIOS = {"RE/MAX"}
+SITIOS_CON_FILTRO_DORMITORIOS = {"RE/MAX"} | set(SITIOS_INMOBILIARIAS.keys())
 
 
 # ============================ MAIN LOGIC ==============================
@@ -305,14 +394,45 @@ def save_seen(seen: set) -> None:
     SEEN_FILE.write_text(json.dumps(sorted(seen), ensure_ascii=False, indent=2))
 
 
+def procesar_listings(sitio: str, listings: list[dict], seen: set, nuevos_avisos: list) -> None:
+    """Aplica los filtros (barrio, dormitorios, precio) a los resultados
+    de un sitio y agrega a nuevos_avisos los que matcheen y no se
+    hayan visto antes. Modifica 'seen' y 'nuevos_avisos' in-place."""
+    for item in listings:
+        uid = f"{sitio}:{item['id']}"
+        if uid in seen:
+            continue
+
+        # Filtro de barrio (si no matchea ninguno de tus barrios, se ignora)
+        if not matches_barrio(item["titulo"]):
+            seen.add(uid)  # lo marcamos visto igual para no re-chequearlo
+            continue
+
+        # Filtro extra de dormitorios, solo para sitios que no lo
+        # soportan como parámetro de búsqueda (ver SITIOS_CON_FILTRO_DORMITORIOS)
+        if sitio in SITIOS_CON_FILTRO_DORMITORIOS and not matches_dormitorios(item["titulo"]):
+            seen.add(uid)
+            continue
+
+        # Filtro de precio (si no se pudo leer el precio, lo dejamos pasar
+        # para que lo revises vos manualmente)
+        if item["precio"] and item["precio"] > PRECIO_MAXIMO:
+            seen.add(uid)
+            continue
+
+        seen.add(uid)
+        nuevos_avisos.append((sitio, item))
+
+
 def main() -> None:
     seen = load_seen()
     nuevos_avisos = []
 
+    # --- Sitios con parser propio (portales grandes) ---
     for sitio, url in SEARCH_URLS.items():
         print(f"--- Revisando {sitio} ---")
-        html = fetch(url)
         parser = PARSERS[sitio]
+        html = fetch(url)
         listings = parser(html) if html else []
 
         if not listings:
@@ -321,31 +441,21 @@ def main() -> None:
             listings = parser(html) if html else []
 
         print(f"  {len(listings)} publicaciones encontradas en la búsqueda")
+        procesar_listings(sitio, listings, seen, nuevos_avisos)
 
-        for item in listings:
-            uid = f"{sitio}:{item['id']}"
-            if uid in seen:
-                continue
+    # --- Inmobiliarias (patrón genérico) ---
+    for sitio, cfg in SITIOS_INMOBILIARIAS.items():
+        print(f"--- Revisando {sitio} ---")
+        html = fetch(cfg["url"])
+        listings = extraer_por_patron_de_link(html, cfg["base"], cfg["patron"]) if html else []
 
-            # Filtro de barrio (si no matchea ninguno de tus barrios, se ignora)
-            if not matches_barrio(item["titulo"]):
-                seen.add(uid)  # lo marcamos visto igual para no re-chequearlo
-                continue
+        if not listings:
+            print("  0 resultados con pedido rápido, reintentando con navegador headless...")
+            html = fetch_with_playwright(cfg["url"])
+            listings = extraer_por_patron_de_link(html, cfg["base"], cfg["patron"]) if html else []
 
-            # Filtro extra de dormitorios, solo para sitios que no lo
-            # soportan como parámetro de búsqueda (ver SITIOS_CON_FILTRO_DORMITORIOS)
-            if sitio in SITIOS_CON_FILTRO_DORMITORIOS and not matches_dormitorios(item["titulo"]):
-                seen.add(uid)
-                continue
-
-            # Filtro de precio (si no se pudo leer el precio, lo dejamos pasar
-            # para que lo revises vos manualmente)
-            if item["precio"] and item["precio"] > PRECIO_MAXIMO:
-                seen.add(uid)
-                continue
-
-            seen.add(uid)
-            nuevos_avisos.append((sitio, item))
+        print(f"  {len(listings)} publicaciones encontradas en la búsqueda")
+        procesar_listings(sitio, listings, seen, nuevos_avisos)
 
     if nuevos_avisos:
         lineas = [f"🏠 {len(nuevos_avisos)} publicación(es) nueva(s) que matchean tu búsqueda:\n"]
