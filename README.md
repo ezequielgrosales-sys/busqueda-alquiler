@@ -1,8 +1,16 @@
-# Buscador automático de alquiler (ZonaProp + MercadoLibre + RE/MAX)
+# Buscador automático de alquiler (ZonaProp + MercadoLibre + RE/MAX + inmobiliarias)
 
 Revisa cada 12 horas si hay publicaciones nuevas en Rosario (Echesortu,
 Centro, Abasto), 2 dormitorios, hasta $600.000, y te avisa por email.
 Corre gratis en GitHub Actions, no necesitás dejar nada prendido.
+
+Fuentes activas: ZonaProp, MercadoLibre, RE/MAX, y las inmobiliarias
+Bertollo, COSA Propiedades, Dunod, Eigen, Inmobiliaria Echesortu,
+Escala Propiedades, GANA Propiedades, Imperia Propiedades, EMA Bienes
+Raíces, Inmobiliaria M&M, Enz Propiedades, SIGMA, Ideal Propiedades y
+RCS Inmobiliaria (de tu lista original de ~70, estas 14 son las que
+ya están confirmadas y funcionando — ver más abajo "Sumar más
+inmobiliarias" para el resto).
 
 Nota: Argenprop quedó desactivado (comentado en `scraper.py`) porque
 bloquea tanto los pedidos simples como el navegador headless — no hay
@@ -79,6 +87,34 @@ filtros que quieras y copiando el link que te queda.
   procesó, así no te vuelve a avisar de las mismas.
 - Solo te manda un email cuando hay algo **nuevo** que matchea tus
   filtros.
+
+## Sumar más inmobiliarias
+
+Tu lista original tenía cerca de 70 sitios. Reviso 4 por vez (llevan
+tiempo de investigación caso por caso) — decime cuáles querés que
+revise a continuación y las voy sumando.
+
+Para las que sí sirven, agregar una nueva es simple, en `scraper.py`
+dentro de `SITIOS_INMOBILIARIAS`:
+
+```python
+"Nombre que quieras": {
+    "url": "https://elsitio.com.ar/alquiler",  # su página de resultados de alquiler
+    "base": "https://elsitio.com.ar",
+    "patron": r"/propiedad/[a-z0-9-]+/?$",  # cómo reconocer el link de un aviso individual
+},
+```
+
+Algunos sitios de tu lista con los que hay que tener cuidado:
+- **Enlaces con parámetros de Google Ads** (`utm_source`, `gclid`, etc.):
+  no son la página real de resultados, hay que buscar el link limpio
+  del sitio.
+- **`hugedomains.com/domain_profile...`**: ese dominio (luxpropiedades.com)
+  está en venta, no es un sitio de una inmobiliaria activa — no se
+  puede scrapear.
+- Sitios que muestran **desarrollos/emprendimientos** en vez de un
+  listado de alquileres tradicional (venta de lotes, countries) no
+  encajan bien con este scraper.
 
 ## Si un sitio deja de andar (importante)
 
