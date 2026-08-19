@@ -195,7 +195,7 @@ def extraer_por_patron_de_link(html: str, base_url: str, patron_id: str) -> list
         if not re.search(patron_id, href):
             continue
         url = href if href.startswith("http") else urljoin(base_url, href)
-        clave = url.split("?")[0].rstrip("/")
+        clave = url.split("?")[0].split("#")[0].rstrip("/")
         if clave in vistos:
             continue
         vistos.add(clave)
@@ -239,9 +239,21 @@ def parse_mercadolibre(html: str) -> list[dict]:
         url = link_tag["href"]
         titulo = card.get_text(" ", strip=True)
         precio = parse_precio(titulo)
+
+        # El código MLA-xxxxxxx es el identificador real y estable de la
+        # publicación. El resto del link trae un "tracking_id" que
+        # MercadoLibre genera al azar en cada carga de página — si lo
+        # usábamos como id, la misma publicación parecía "nueva" cada vez.
+        match_id = re.search(r"MLA-\d+", url)
+        id_estable = match_id.group(0) if match_id else url.split("?")[0].split("#")[0].rstrip("/").split("/")[-1]
+
+        # Para el link que mandamos por mail, sacamos toda la basura de
+        # tracking (todo lo que viene después de "?" o "#").
+        url_limpia = url.split("?")[0].split("#")[0]
+
         resultados.append({
-            "id": url.split("?")[0].rstrip("/").split("/")[-1],
-            "url": url,
+            "id": id_estable,
+            "url": url_limpia,
             "titulo": titulo[:150],
             "precio": precio,
         })
