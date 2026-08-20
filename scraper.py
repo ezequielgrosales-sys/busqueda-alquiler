@@ -87,14 +87,15 @@ def matches_barrio(texto: str) -> bool:
 
 
 def parse_precio(texto: str) -> int | None:
-    """Extrae un número de precio en pesos de un string tipo '$ 450.000'.
-    Si detecta que el precio está en dólares (USD/u$s), devuelve None -
-    no lo podemos comparar directo contra PRECIO_MAXIMO (que es en
-    pesos), así que lo dejamos pasar sin filtrar por precio."""
+    """Extrae un número de precio en pesos de un string tipo '$ 450.000'
+    o 'ARS 450.000'. Si detecta que el precio está en dólares (USD/u$s/
+    u$d), devuelve None - no lo podemos comparar directo contra
+    PRECIO_MAXIMO (que es en pesos), así que lo dejamos pasar sin
+    filtrar por precio."""
     texto_limpio = texto.replace("\xa0", " ")
-    if re.search(r"u\$s|usd", texto_limpio, re.IGNORECASE):
+    if re.search(r"\bu\$s\b|\bu\$d\b|\busd\b", texto_limpio, re.IGNORECASE):
         return None
-    match = re.search(r"\$\s?([\d.,]+)", texto_limpio)
+    match = re.search(r"(?:\$|\bars\b)\s*([\d.,]+)", texto_limpio, re.IGNORECASE)
     if not match:
         return None
     solo_digitos = re.sub(r"[^\d]", "", match.group(1))
@@ -362,6 +363,99 @@ SITIOS_INMOBILIARIAS = {
         "base": "https://rcsinmobiliaria.com.ar",
         "patron": r"/site/properties/\d+/[a-z0-9-]+",
     },
+    "Administración Dusso": {
+        "url": "https://www.admdusso.com/Alquiler",
+        "base": "https://www.admdusso.com",
+        "patron": r"/p/\d+-",
+    },
+    "Haus Propiedades": {
+        "url": "https://www.hausprop.com/estado/en-alquiler/",
+        "base": "https://www.hausprop.com",
+        "patron": r"/propiedad/\d+_[a-z0-9-]+/?$",
+    },
+    "NISA Propiedades": {
+        "url": "https://www.nisapropiedades.com.ar/Alquiler",
+        "base": "https://www.nisapropiedades.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Enlaze Propiedades": {
+        "url": "https://www.enlazepropiedades.com/Alquiler",
+        "base": "https://www.enlazepropiedades.com",
+        "patron": r"/p/\d+-",
+    },
+    "Farina Inmobiliaria": {
+        # Esta URL ya viene filtrada por 2 dormitorios (bedrooms=2), a
+        # diferencia de la mayoría de las inmobiliarias de esta lista.
+        "url": "https://farinainmobiliaria.com.ar/search-results/?status%5B%5D=alquiler&bedrooms=2",
+        "base": "https://farinainmobiliaria.com.ar",
+        "patron": r"/property/[a-z0-9-]+/?$",
+    },
+    "Ancasti Propiedades": {
+        "url": "https://www.ancasti.com.ar/Alquiler",
+        "base": "https://www.ancasti.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Di Santo Negocios Inmobiliarios": {
+        "url": "https://www.disantoni.com/Alquiler",
+        "base": "https://www.disantoni.com",
+        "patron": r"/p/\d+-",
+    },
+    "Gargarella Inmobiliaria": {
+        "url": "https://www.waltergargarella.com/propiedades/alquiler",
+        "base": "https://www.waltergargarella.com",
+        "patron": r"/propiedad-detalle/[a-z0-9-]+",
+    },
+    "Piazza Inmobiliaria": {
+        "url": "https://www.inmobiliariapiazza.com.ar/Alquiler",
+        "base": "https://www.inmobiliariapiazza.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Sebastián Ramasco Padilla": {
+        "url": "https://sramascopadilla.com.ar/status/alquiler/",
+        "base": "https://sramascopadilla.com.ar",
+        "patron": r"/property/[a-z0-9-]+/?$",
+    },
+    "González Theyler": {
+        "url": "https://www.gonzaleztheyler.com.ar/alquiler/departamentos",
+        "base": "https://www.gonzaleztheyler.com.ar",
+        "patron": r"/alquiler/[a-z]+/[a-z0-9-]+-\d+$",
+    },
+    "Alquilar.click (Futura)": {
+        "url": "https://www.alquilar.click/",
+        "base": "https://www.alquilar.click",
+        "patron": r"/propiedades/ver/id/\d+/kw/[a-z0-9-]+",
+    },
+    "CC Carlachiani": {
+        # Ya viene filtrada por 2 dormitorios (dormitorios=2)
+        "url": "https://cccarlachiani.com.ar/buscador-mapa/?operacion=alquiler&tipo=departamentos&dormitorios=2&localidad=&precio_min=&precio_max=",
+        "base": "https://cccarlachiani.com.ar",
+        "patron": r"/propiedades/[a-z0-9-]+/?$",
+    },
+    "Beltrán Inmobiliaria": {
+        "url": "https://www.beltraninmobiliaria.com.ar/Alquiler",
+        "base": "https://www.beltraninmobiliaria.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Terrasol Inmobiliaria": {
+        "url": "https://www.terrasolinmobiliaria.com/Alquiler",
+        "base": "https://www.terrasolinmobiliaria.com",
+        "patron": r"/p/\d+-",
+    },
+    "Contratar Servicios Inmobiliarios": {
+        "url": "https://contratarserviciosinmobiliarios.com.ar/site/properties/rental",
+        "base": "https://contratarserviciosinmobiliarios.com.ar",
+        "patron": r"/site/properties/\d+/[a-z0-9-]+",
+    },
+    "Marca Negocios Inmobiliarios": {
+        "url": "https://www.marcainmobiliaria.com.ar/Alquiler",
+        "base": "https://www.marcainmobiliaria.com.ar",
+        "patron": r"/p/\d+-",
+    },
+    "Ferrari Propiedades": {
+        "url": "https://www.ferraripropiedades.com/site/properties/rental",
+        "base": "https://www.ferraripropiedades.com",
+        "patron": r"/site/properties/\d+/[a-z0-9-]+",
+    },
 }
 
 # RE/MAX no tiene filtro de dormitorios en la URL de búsqueda (a
@@ -378,7 +472,7 @@ def matches_dormitorios(texto: str) -> bool:
     return bool(palabra and f"{palabra} dormitorio" in texto)
 
 
-SITIOS_CON_FILTRO_DORMITORIOS = {"RE/MAX"} | set(SITIOS_INMOBILIARIAS.keys())
+SITIOS_CON_FILTRO_DORMITORIOS = ({"RE/MAX"} | set(SITIOS_INMOBILIARIAS.keys())) - {"Farina Inmobiliaria", "CC Carlachiani"}
 
 
 # ============================ MAIN LOGIC ==============================
