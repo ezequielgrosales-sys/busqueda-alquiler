@@ -168,7 +168,14 @@ def fetch_with_playwright(url: str) -> str | None:
                 page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
                 pass  # algunos sitios nunca llegan a "networkidle", seguimos igual
-            page.wait_for_timeout(3000)
+
+            # Algunos sitios cargan los avisos recién cuando el usuario
+            # hace scroll (lazy-load / scroll infinito). Simulamos eso
+            # bajando la página de a poco.
+            for _ in range(4):
+                page.mouse.wheel(0, 2000)
+                page.wait_for_timeout(1000)
+
             html = page.content()
             browser.close()
 
@@ -492,30 +499,47 @@ def procesar_listings(sitio: str, listings: list[dict], seen: set, nuevos_avisos
     """Aplica los filtros (barrio, dormitorios, precio) a los resultados
     de un sitio y agrega a nuevos_avisos los que matcheen y no se
     hayan visto antes. Modifica 'seen' y 'nuevos_avisos' in-place."""
+    ya_vistas = 0
+    sin_barrio = 0
+    sin_dormitorios = 0
+    supera_precio = 0
+    nuevas = 0
+
     for item in listings:
         uid = f"{sitio}:{item['id']}"
         if uid in seen:
+            ya_vistas += 1
             continue
 
         # Filtro de barrio (si no matchea ninguno de tus barrios, se ignora)
         if not matches_barrio(item["titulo"]):
+            sin_barrio += 1
             seen.add(uid)  # lo marcamos visto igual para no re-chequearlo
             continue
 
         # Filtro extra de dormitorios, solo para sitios que no lo
         # soportan como parámetro de búsqueda (ver SITIOS_CON_FILTRO_DORMITORIOS)
         if sitio in SITIOS_CON_FILTRO_DORMITORIOS and not matches_dormitorios(item["titulo"]):
+            sin_dormitorios += 1
             seen.add(uid)
             continue
 
         # Filtro de precio (si no se pudo leer el precio, lo dejamos pasar
         # para que lo revises vos manualmente)
         if item["precio"] and item["precio"] > PRECIO_MAXIMO:
+            supera_precio += 1
             seen.add(uid)
             continue
 
         seen.add(uid)
         nuevos_avisos.append((sitio, item))
+        nuevas += 1
+
+    print(
+        f"    -> {ya_vistas} ya vistas | {sin_barrio} sin coincidencia de barrio | "
+        f"{sin_dormitorios} no son de {DORMITORIOS} dormitorios | "
+        f"{supera_precio} superan el precio máximo | {nuevas} nuevas que matchean"
+    )
 
 
 def main() -> None:
