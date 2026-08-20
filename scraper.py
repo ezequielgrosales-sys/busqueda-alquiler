@@ -23,11 +23,12 @@ from bs4 import BeautifulSoup
 # ============================== CONFIG ==============================
 
 # Barrios que te interesan (en minúscula, sin tildes). El scraper busca
-# estas palabras en el título/dirección de cada publicación.
-BARRIOS = ["echesortu", "centro", "abasto"]
+# estas palabras en el título/dirección de cada publicación. Dejalo
+# vacío ([]) para no filtrar por barrio y buscar en toda Rosario.
+BARRIOS = []
 
 # Precio máximo en pesos argentinos
-PRECIO_MAXIMO = 600_000
+PRECIO_MAXIMO = 650_000
 
 # Dormitorios buscados
 DORMITORIOS = 2
@@ -82,6 +83,8 @@ def send_email(asunto: str, mensaje: str) -> None:
 # ============================ HELPERS ================================
 
 def matches_barrio(texto: str) -> bool:
+    if not BARRIOS:  # sin barrios configurados = no filtrar, dejar pasar todo
+        return True
     texto = texto.lower()
     return any(barrio in texto for barrio in BARRIOS)
 
