@@ -436,8 +436,10 @@ SITIOS_INMOBILIARIAS = {
         "patron": r"/propiedades/ver/id/\d+/kw/[a-z0-9-]+",
     },
     "CC Carlachiani": {
-        # Ya viene filtrada por 2 dormitorios (dormitorios=2)
-        "url": "https://cccarlachiani.com.ar/buscador-mapa/?operacion=alquiler&tipo=departamentos&dormitorios=2&localidad=&precio_min=&precio_max=",
+        # El "buscador-mapa" ignora los filtros de la URL (son solo del
+        # lado del cliente), así que usamos el listado normal y
+        # filtramos alquiler + dormitorios acá con el texto de cada aviso.
+        "url": "https://cccarlachiani.com.ar/tipo-propiedad/departamentos/",
         "base": "https://cccarlachiani.com.ar",
         "patron": r"/propiedades/[a-z0-9-]+/?$",
     },
@@ -482,7 +484,17 @@ def matches_dormitorios(texto: str) -> bool:
     return bool(palabra and f"{palabra} dormitorio" in texto)
 
 
-SITIOS_CON_FILTRO_DORMITORIOS = ({"RE/MAX"} | set(SITIOS_INMOBILIARIAS.keys())) - {"Farina Inmobiliaria", "CC Carlachiani"}
+def matches_alquiler(texto: str) -> bool:
+    """Para sitios que mezclan venta y alquiler en el mismo listado
+    (el título de cada aviso dice explícitamente 'Alquiler' o 'Venta')."""
+    return "alquiler" in texto.lower()
+
+
+SITIOS_CON_FILTRO_DORMITORIOS = ({"RE/MAX"} | set(SITIOS_INMOBILIARIAS.keys())) - {"Farina Inmobiliaria"}
+
+# Sitios cuyo listado mezcla venta y alquiler, y hay que filtrar por
+# operación además de por dormitorios/barrio/precio.
+SITIOS_CON_FILTRO_OPERACION = {"CC Carlachiani"}
 
 
 # ============================ MAIN LOGIC ==============================
@@ -518,6 +530,12 @@ def procesar_listings(sitio: str, listings: list[dict], seen: set, nuevos_avisos
         if not matches_barrio(item["titulo"]):
             sin_barrio += 1
             seen.add(uid)  # lo marcamos visto igual para no re-chequearlo
+            continue
+
+        # Filtro de operación, solo para sitios que mezclan venta y
+        # alquiler en el mismo listado (ver SITIOS_CON_FILTRO_OPERACION)
+        if sitio in SITIOS_CON_FILTRO_OPERACION and not matches_alquiler(item["titulo"]):
+            seen.add(uid)
             continue
 
         # Filtro extra de dormitorios, solo para sitios que no lo
