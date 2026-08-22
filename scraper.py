@@ -28,7 +28,7 @@ from bs4 import BeautifulSoup
 BARRIOS = []
 
 # Precio máximo en pesos argentinos
-PRECIO_MAXIMO = 650_000
+PRECIO_MAXIMO = 750_000
 
 # Dormitorios buscados
 DORMITORIOS = 2
@@ -490,6 +490,13 @@ def matches_alquiler(texto: str) -> bool:
     return "alquiler" in texto.lower()
 
 
+def tiene_cochera(texto: str) -> bool:
+    """Solo informativo: NO filtra nada, es un dato de más que se
+    muestra en el mail si el título/descripción lo menciona."""
+    texto = texto.lower()
+    return "cochera" in texto or "garage" in texto or "garaje" in texto
+
+
 SITIOS_CON_FILTRO_DORMITORIOS = ({"RE/MAX"} | set(SITIOS_INMOBILIARIAS.keys())) - {"Farina Inmobiliaria"}
 
 # Sitios cuyo listado mezcla venta y alquiler, y hay que filtrar por
@@ -600,7 +607,8 @@ def main() -> None:
         lineas = [f"🏠 {len(nuevos_avisos)} publicación(es) nueva(s) que matchean tu búsqueda:\n"]
         for sitio, item in nuevos_avisos:
             precio_txt = f"${item['precio']:,}".replace(",", ".") if item["precio"] else "precio no detectado"
-            lineas.append(f"[{sitio}] {precio_txt}\n{item['url']}\n")
+            cochera_txt = " 🚗 (menciona cochera)" if tiene_cochera(item["titulo"]) else ""
+            lineas.append(f"[{sitio}] {precio_txt}{cochera_txt}\n{item['url']}\n")
         mensaje = "\n".join(lineas)
         print(mensaje)
         send_email(f"🏠 {len(nuevos_avisos)} alquiler(es) nuevo(s) encontrado(s)", mensaje)
